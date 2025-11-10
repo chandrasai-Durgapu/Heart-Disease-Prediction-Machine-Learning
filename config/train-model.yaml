@@ -1,0 +1,37 @@
+stages:
+  data-ingestion:
+    cmd: python src/1_data_ingestion.py
+    outs:
+      -artifacts/ingestion/ingested.csv
+  data-validation:
+    cmd: python src/2_data_validation.py
+    deps:
+      -artifacts/ingestion/ingested.csv
+      -config/schema.yaml
+  data-transformation:
+    cmd: python src/3_data_transformation.py
+    deps:
+      - artifacts/ingestion/ingested.csv
+      - config/schema.yaml
+      - config/params.yaml       
+    outs:
+      - artifacts/transformation/X_train.csv
+      - artifacts/transformation/X_test.csv
+      - artifacts/transformation/y_train.csv
+      - artifacts/transformation/y_test.csv
+  model_trainer:
+    cmd: python src/4_model_trainer.py
+    deps:
+      - artifacts/transformation/X_train.csv
+      - artifacts/transformation/y_train.csv
+      - config/params.yaml
+    outs:
+      - artifacts/model/model.pkl
+  model_evaluate:
+    cmd: python src/5_model_evaluate.py
+    deps:
+      - artifacts/transformation/X_test.csv
+      - artifacts/transformation/y_test.csv
+      - artifacts/model/model.pkl
+    outs:
+      - artifacts/evaluation/metrics.txt  

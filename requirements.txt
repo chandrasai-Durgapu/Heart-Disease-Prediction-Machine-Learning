@@ -9,3 +9,13 @@ mlflow
 dagshub
 joblib
 
+pyyaml==6.0.2
+
+dvc==3.51.0
+dvclive==3.46.0
+
+pydantic==2.8.2
+
+fastapi==0.115.0
+uvicorn==0.30.3
+
