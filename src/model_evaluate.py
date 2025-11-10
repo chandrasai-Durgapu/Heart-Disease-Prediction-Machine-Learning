@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import joblib
-from logger import get_logger
+from utils.logger import get_logger
 import yaml
 import mlflow
 import dagshub

@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import yaml
-from logger import get_logger
+from utils.logger import get_logger
 import time
 
 logger = get_logger()
@@ -53,7 +53,7 @@ def validate_data():
 
         end_time = time.perf_counter()
         logger.info(f"Data Validation completed in {end_time-start_time:.2f} seconds")
-
+        return True
     except Exception as e:
         logger.error(f"Error during Validation: {e}")
         raise e

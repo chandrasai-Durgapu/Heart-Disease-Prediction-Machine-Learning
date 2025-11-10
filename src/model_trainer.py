@@ -3,13 +3,14 @@ import os
 import joblib
 import time
 import yaml
-from logger import get_logger
+from utils.logger import get_logger
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score
 import mlflow
 import dagshub
 
 logger=get_logger()
+
 dagshub.init(
     repo_owner='chandrasekharcse522',
     repo_name='Heart-Disease-Prediction-Machine-Learning',

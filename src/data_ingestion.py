@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from logger import get_logger
+from utils.logger import get_logger
 import time
 logger=get_logger()
 
