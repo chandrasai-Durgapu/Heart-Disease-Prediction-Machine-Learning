@@ -1,63 +1,106 @@
 import streamlit as st
-import pandas as pd
 import requests
 
-# FastAPI backend URL (adjust if running on different host/port)
+# --- Configuration ---
+# MUST match the port where your FastAPI server is running
 FASTAPI_URL = "http://127.0.0.1:8000/predict"
 
-st.set_page_config(page_title="❤️ Heart Disease Prediction", layout="centered")
-st.title("❤️ Heart Disease Prediction App")
-st.markdown("Enter patient details below and get instant predictions!")
+st.set_page_config(page_title="Heart Disease Predictor", layout="centered")
+st.title("❤️ Heart Disease Prediction")
+st.markdown("Enter the patient's data below to get a prediction.")
 
-# --- Input fields ---
-col1, col2 = st.columns(2)
+# --- Input Form ---
+with st.form("prediction_form"):
+    st.header("Patient Vitals")
+    
+    # Row 1: Age, Sex, ChestPainType
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        age = st.slider("Age", 20, 90, 50, key='Age')
+    with col2:
+        sex = st.selectbox("Sex", ["M", "F"], key='Sex')
+    with col3:
+        cp_type = st.selectbox("Chest Pain Type", ["ATA", "ASY", "NAP", "TA"], key='ChestPainType')
 
-with col1:
-    Age = st.number_input("Age", min_value=1, max_value=120, value=40)
-    Sex = st.selectbox("Sex", ["M", "F"])
-    ChestPainType = st.selectbox("Chest Pain Type", ["TA", "ATA", "NAP", "ASY"])
-    RestingBP = st.number_input("Resting BP", min_value=0, max_value=200, value=120)
-    Cholesterol = st.number_input("Cholesterol", min_value=0, max_value=600, value=200)
+    # Row 2: RestingBP, Cholesterol, FastingBS
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        resting_bp = st.number_input("Resting BP (mmHg)", 80, 200, 120, key='RestingBP')
+    with col5:
+        cholesterol = st.number_input("Cholesterol (mg/dl)", 100, 600, 200, key='Cholesterol')
+    with col6:
+        fasting_bs = st.selectbox("Fasting BS > 120 mg/dl?", [0, 1], format_func=lambda x: "Yes" if x==1 else "No", key='FastingBS')
 
-with col2:
-    FastingBS = st.selectbox("Fasting Blood Sugar > 120 mg/dl", [0, 1])
-    RestingECG = st.selectbox("Resting ECG", ["Normal", "ST", "LVH"])
-    MaxHR = st.number_input("Max Heart Rate", min_value=60, max_value=220, value=150)
-    ExerciseAngina = st.selectbox("Exercise Angina", ["Y", "N"])
-    Oldpeak = st.number_input("Oldpeak (ST depression)", min_value=0.0, max_value=10.0, value=1.0, step=0.1)
-    ST_Slope = st.selectbox("ST Slope", ["Up", "Flat", "Down"])
+    # Row 3: RestingECG, MaxHR, ExerciseAngina
+    col7, col8, col9 = st.columns(3)
+    with col7:
+        resting_ecg = st.selectbox("Resting ECG", ["Normal", "ST", "LVH"], key='RestingECG')
+    with col8:
+        max_hr = st.number_input("Max Heart Rate", 60, 202, 150, key='MaxHR')
+    with col9:
+        exercise_angina = st.selectbox("Exercise Induced Angina", ["Y", "N"], key='ExerciseAngina')
 
-# --- Predict button ---
-if st.button("🔍 Predict Heart Disease"):
-    # Prepare input data as dict
+    # Row 4: Oldpeak, ST_Slope
+    col10, col11, _ = st.columns(3)
+    with col10:
+        oldpeak = st.number_input("Oldpeak", 0.0, 6.2, 1.0, step=0.1, format="%.1f", key='Oldpeak')
+    with col11:
+        st_slope = st.selectbox("ST Slope", ["Up", "Flat", "Down"], key='ST_Slope')
+        
+    st.markdown("---")
+    submitted = st.form_submit_button("Get Prediction")
+
+# --- Prediction Logic (Corrected Error Handling) ---
+if submitted:
+    # 1. Prepare data payload
     input_data = {
-        "Age": Age,
-        "Sex": Sex,
-        "ChestPainType": ChestPainType,
-        "RestingBP": RestingBP,
-        "Cholesterol": Cholesterol,
-        "FastingBS": FastingBS,
-        "RestingECG": RestingECG,
-        "MaxHR": MaxHR,
-        "ExerciseAngina": ExerciseAngina,
-        "Oldpeak": Oldpeak,
-        "ST_Slope": ST_Slope,
+        "Age": age, "Sex": sex, "ChestPainType": cp_type, "RestingBP": resting_bp,
+        "Cholesterol": cholesterol, "FastingBS": fasting_bs, "RestingECG": resting_ecg,
+        "MaxHR": max_hr, "ExerciseAngina": exercise_angina, "Oldpeak": oldpeak,
+        "ST_Slope": st_slope
     }
 
+    # 2. Send POST request to FastAPI
     try:
         response = requests.post(FASTAPI_URL, json=input_data)
-
+        
         if response.status_code == 200:
             result = response.json()
-            if "prediction" in result:
-                if result["prediction"] == 1:
-                    st.error("🚨 The model predicts **Heart Disease (Positive)**.")
-                else:
-                    st.success("✅ The model predicts **No Heart Disease (Negative)**.")
+            st.success("✅ Prediction Received!")
+            
+            # Display result
+            # This block is safe because status_code is 200
+            if result.get('prediction') == 1:
+                st.error(f"🔴 Result: {result.get('result', 'Heart Disease Detected')}", icon="🚨")
+                st.balloons()
             else:
-                st.warning(f"⚠️ {result.get('error', 'Unexpected error occurred')}")
+                st.success(f"🟢 Result: {result.get('result', 'No Heart Disease')}", icon="👍")
+        
+        # --- CORRECTED ERROR HANDLING BLOCK ---
         else:
-            st.error(f"❌ Server error: {response.status_code}")
+            # Handle non-200 responses (e.g., 422 Validation Error, 500 Server Error)
+            st.error(f"❌ API Error (Status {response.status_code})")
+            
+            try:
+                # Attempt to parse the error detail from the JSON response
+                error_data = response.json()
+                # FastAPI/Pydantic errors use 'detail'
+                error_detail = error_data.get('detail', f'Server returned non-JSON error.')
+                
+                if isinstance(error_detail, list):
+                    # For Pydantic validation errors, 'detail' is often a list of errors
+                    st.warning("⚠️ Data Validation Failed:")
+                    for err in error_detail:
+                        st.code(f"Field: {err.get('loc')[-1]}, Message: {err.get('msg')}")
+                else:
+                    st.warning(f"**Server Message:** {error_detail}")
+                    st.info("Check the FastAPI server console for the full Python traceback.")
 
-    except Exception as e:
-        st.error(f"⚠️ Connection Error: {e}")
+            except requests.exceptions.JSONDecodeError:
+                st.warning("Could not read error message from server response.")
+                st.code(response.text)
+        # --- END OF CORRECTED BLOCK ---
+            
+    except requests.exceptions.ConnectionError:
+        st.error("🔌 Connection Error: Could not connect to the FastAPI server.")
+        st.info(f"Please ensure the server is running at **{FASTAPI_URL.replace('/predict', '')}**.")

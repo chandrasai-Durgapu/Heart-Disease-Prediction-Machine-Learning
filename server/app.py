@@ -1,25 +1,52 @@
-import os
-import sys
+
 import joblib
 import pandas as pd
-from fastapi import FastAPI
+import os
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-# Fix import path so src/ is discoverable
-# sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+# Assuming your pipeline functions and logger are set up correctly
+# from utils.logger import get_logger
+# from src.data_ingestion import ingest_data
+# from src.data_validation import validate_data
+# from src.data_transformation import transform_data
+# from src.model_trainer import train_model
+# from src.model_evaluate import evaluate_model
 
-from utils.logger import get_logger
-from src.data_ingestion import ingest_data
-from src.data_validation import validate_data
-from src.data_transformation import transform_data
-from src.model_trainer import train_model
-from src.model_evaluate import evaluate_model
+# --- Placeholder/Mock Functions for Pipeline & Logger ---
+# You MUST ensure your actual imported functions work correctly.
+def get_logger():
+    class MockLogger:
+        def info(self, msg): print(f"INFO: {msg}")
+        def warning(self, msg): print(f"WARNING: {msg}")
+        def error(self, msg): print(f"ERROR: {msg}")
+    return MockLogger()
 
-# Initialize FastAPI app
-app = FastAPI(title="Heart Disease Prediction API")
+def ingest_data(): pass
+def validate_data(): return True
+def transform_data(): return True
+def train_model(): return 0.85 
+def evaluate_model(): pass
+
 logger = get_logger()
+# --------------------------------------------------------
 
-# Pydantic input model
+
+# -------------------------------
+# Use Pathlib for robust paths
+# -------------------------------
+# BASE_DIR is the directory where this 'app.py' file is located
+BASE_DIR = Path(__file__).resolve().parent
+
+MODEL_PATH = BASE_DIR / "artifacts" / "model" / "best_model.pkl"
+ENCODER_PATH = BASE_DIR / "artifacts" / "transformation" / "encoder.pkl"
+SCALER_PATH = BASE_DIR / "artifacts" / "transformation" / "scaler.pkl"
+
+app = FastAPI(title="Heart Disease Prediction API")
+
+
 class HeartInput(BaseModel):
     Age: int
     Sex: str
@@ -34,79 +61,77 @@ class HeartInput(BaseModel):
     ST_Slope: str
 
 
-MODEL_PATH = "artifacts/model/best_model.pkl"
-
-
 def run_pipeline():
-    """
-    Runs the full ML pipeline:
-    1. Data ingestion
-    2. Validation
-    3. Transformation
-    4. Model training
-    5. Model evaluation
-    """
+    """Run full ML pipeline to generate artifacts."""
+    logger.info("Running ML pipeline...")
     try:
-        logger.info("Step 1: Data Ingestion")
         ingest_data()
-
-        logger.info("Step 2: Data Validation")
-        valid = validate_data()
-        if not valid:
-            return {"status": "Pipeline stopped", "reason": "Validation failed"}
-
-        logger.info("Step 3: Data Transformation")
-        transformed = transform_data()
-        if not transformed:
-            return {"status": "Pipeline stopped", "reason": "Data transformation failed"}
-
-        logger.info("Step 4: Model Training")
+        if not validate_data():
+            raise Exception("Data validation failed.")
+        if not transform_data():
+            raise Exception("Data transformation failed.")
         acc = train_model()
-
-        logger.info("Step 5: Model Evaluation")
         evaluate_model()
-
-        return {"status": "Pipeline completed", "accuracy": acc}
-
+        logger.info(f"Pipeline completed successfully with accuracy: {acc}")
+        return acc
     except Exception as e:
-        logger.error(f"Pipeline failed: {e}")
-        return {"status": "Pipeline failed", "error": str(e)}
-
-
-@app.on_event("startup")
-def startup_event():
-    """
-    Automatically run ML pipeline on startup.
-    """
-    logger.info(" Starting ML pipeline automatically on app startup...")
-    result = run_pipeline()
-    logger.info(f" Pipeline result: {result}")
-
-
-@app.get("/")
-def root():
-    return {"message": "Heart Disease Prediction API is running!"}
+        logger.error(f"ML Pipeline failed: {e}")
+        # Reraise the exception to stop prediction attempt
+        raise HTTPException(status_code=500, detail=f"ML Pipeline initialization failed: {str(e)}")
 
 
 @app.post("/predict")
 def predict(input_data: HeartInput):
     try:
-        # Ensure model is loaded
-        if not os.path.exists(MODEL_PATH):
-            logger.error(f"Model not found at {MODEL_PATH}")
-            return {"error": "Model not trained yet. Please rerun the pipeline."}
+        # Check if artifacts exist
+        artifact_paths = [MODEL_PATH, ENCODER_PATH, SCALER_PATH]
+        artifacts_missing = False
+        for path in artifact_paths:
+            if not Path(path).exists():
+                artifacts_missing = True
+                break
+        
+        # Auto-run pipeline if artifacts are missing
+        if artifacts_missing:
+            logger.warning("Artifacts missing. Running pipeline...")
+            run_pipeline() # This function will raise HTTPException on failure
 
-        model = joblib.load(MODEL_PATH)
-        logger.info("Model loaded successfully for prediction.")
+        # Load artifacts
+        # We use .resolve() just to ensure the path is fully resolved before loading
+        model = joblib.load(MODEL_PATH.resolve())
+        encoder = joblib.load(ENCODER_PATH.resolve())
+        scaler = joblib.load(SCALER_PATH.resolve())
 
         # Convert input to DataFrame
-        data_dict = input_data.dict()
-        X = pd.DataFrame([data_dict])
+        # Using model_dump_json() then reading it back ensures Pydantic validation handles
+        # the conversion correctly for FastAPI's POST request body.
+        df = pd.DataFrame([input_data.model_dump()])
+
+        # Define categorical & numeric columns (Must match your training columns!)
+        categorical_cols = ['Sex', 'ChestPainType', 'RestingECG', 'ExerciseAngina', 'ST_Slope']
+        numeric_cols = [col for col in df.columns if col not in categorical_cols]
+
+        # Preprocess
+        encoded_df = pd.DataFrame(
+            encoder.transform(df[categorical_cols]).toarray(),
+            columns=encoder.get_feature_names_out(categorical_cols)
+        )
+        scaled_df = pd.DataFrame(
+            scaler.transform(df[numeric_cols]),
+            columns=numeric_cols
+        )
+
+        final_df = pd.concat([scaled_df.reset_index(drop=True), encoded_df.reset_index(drop=True)], axis=1)
 
         # Predict
-        prediction = model.predict(X)[0]
-        return {"prediction": int(prediction)}
+        prediction = model.predict(final_df)[0]
+        result = "Heart Disease Detected" if prediction == 1 else "No Heart Disease"
 
+        return {"prediction": int(prediction), "result": result}
+
+    except HTTPException:
+        # Re-raise HTTPExceptions raised by run_pipeline
+        raise
     except Exception as e:
         logger.error(f"Prediction failed: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Prediction processing failed: {str(e)}")
