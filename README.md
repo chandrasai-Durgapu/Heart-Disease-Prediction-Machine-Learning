@@ -1,8 +1,8 @@
-# ❤️ Heart Disease Prediction: Full-Stack ML Application
+# ❤️ Heart Disease Prediction: A complete project with Full-Stack Machine-Learning Application
 
 This project implements a complete Machine Learning (ML) pipeline—from data ingestion to deployment—to predict the likelihood of heart disease in patients based on clinical features.
 
-The application is deployed using a **FastAPI** backend for serving predictions and a **Streamlit** frontend for a user-friendly interface.
+The application is deployed using a **FastAPI** backend for serving predictions and a **Streamlit** frontend for a user-friendly interface. It includes MLflow and etc...
 
 ## 🚀 Key Features
 
@@ -26,7 +26,12 @@ Sequential Learning: Each new tree is specifically trained to correct the errors
 Optimization: The method uses a gradient descent approach to minimize the loss (error), effectively forcing subsequent trees to focus their learning on the most difficult-to-classify data points.
 
 Performance: GBC and its variants (like XGBoost or LightGBM) are widely known for delivering high predictive accuracy on structured, tabular datasets like the one used for heart disease prediction.
+
 ---
+## Jupyter Notebook
+Jupyter notebook contains all test cases and experiments before building complete application
+---
+
 ## Clone the repository
 ```bash
 git clone https://github.com/chandrasai-Durgapu/Heart-Disease-Prediction-Machine-Learning.git
